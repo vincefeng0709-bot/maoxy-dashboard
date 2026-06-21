@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Plus, Trash2, FolderOpen, Star, Heart, Bookmark, Globe,
+  Plus,
+  FolderOpen, Star, Heart, Bookmark, Globe,
   Zap, Coffee, Music, Gamepad2, Briefcase, GraduationCap,
   ShoppingCart, Camera, Palette, Terminal, Database, Layers,
 } from 'lucide-react'
@@ -37,16 +37,12 @@ export function getIconComponent(name: string): LucideIcon {
   return ICON_OPTIONS.find((o) => o.name === name)?.icon ?? FolderOpen
 }
 
-interface Props {
-  onSectionsChange?: () => void
-}
-
 export function useCustomSections() {
   return useLocalStorage<CustomSection[]>('custom-sections', [])
 }
 
-export default function CustomSectionManager({ onSectionsChange }: Props) {
-  const [sections, setSections] = useCustomSections()
+export default function CustomSectionAddButton() {
+  const [, setSections] = useCustomSections()
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ title: '', iconName: 'FolderOpen' })
 
@@ -65,49 +61,10 @@ export default function CustomSectionManager({ onSectionsChange }: Props) {
     ])
     setForm({ title: '', iconName: 'FolderOpen' })
     setModalOpen(false)
-    onSectionsChange?.()
-  }
-
-  const deleteSection = (id: string, storageKey: string) => {
-    if (!confirm('确认删除该分类？其中的链接也会一并删除。')) return
-    setSections((prev) => prev.filter((s) => s.id !== id))
-    localStorage.removeItem(storageKey)
-    onSectionsChange?.()
   }
 
   return (
     <>
-      {/* 已有自定义分类的删除入口（显示在各卡片上，此处仅提供管理列表） */}
-      <AnimatePresence>
-        {sections.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-wrap gap-2 mb-2"
-          >
-            {sections.map((s) => {
-              const Icon = getIconComponent(s.iconName)
-              return (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-sm text-zinc-600 dark:text-zinc-300"
-                >
-                  <Icon size={13} />
-                  <span>{s.title}</span>
-                  <button
-                    onClick={() => deleteSection(s.id, s.storageKey)}
-                    className="ml-1 text-zinc-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 添加按钮卡片 */}
       <GlassCard
         hover
         onClick={() => setModalOpen(true)}
@@ -166,11 +123,7 @@ export default function CustomSectionManager({ onSectionsChange }: Props) {
           </div>
 
           <div className="flex gap-2 pt-1">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => setModalOpen(false)}
-            >
+            <Button variant="secondary" className="flex-1" onClick={() => setModalOpen(false)}>
               取消
             </Button>
             <Button

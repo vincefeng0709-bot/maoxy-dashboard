@@ -12,7 +12,7 @@ import Sidebar from './components/layout/Sidebar'
 import HeroSection from './components/modules/HeroSection'
 import SearchCenter from './components/modules/SearchCenter'
 import LinkGrid from './components/modules/LinkGrid'
-import CustomSectionManager, {
+import CustomSectionAddButton, {
   useCustomSections,
   getIconComponent,
 } from './components/modules/CustomSectionManager'
@@ -59,7 +59,12 @@ export default function App() {
     'dashboard-settings',
     DEFAULT_SETTINGS
   )
-  const [customSections] = useCustomSections()
+  const [customSections, setCustomSections] = useCustomSections()
+
+  const deleteCustomSection = (id: string, storageKey: string) => {
+    setCustomSections((prev) => prev.filter((s) => s.id !== id))
+    localStorage.removeItem(storageKey)
+  }
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('hero')
@@ -205,6 +210,7 @@ export default function App() {
                         icon={Icon}
                         storageKey={section.storageKey}
                         defaults={[]}
+                        onDeleteSection={() => deleteCustomSection(section.id, section.storageKey)}
                       />
                     </div>
                   )
@@ -214,7 +220,7 @@ export default function App() {
 
             {/* Add custom section button */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <CustomSectionManager />
+              <CustomSectionAddButton />
             </div>
 
             {/* Todo + Weather row */}

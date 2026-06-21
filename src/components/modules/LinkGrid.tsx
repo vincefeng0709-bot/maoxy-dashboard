@@ -47,9 +47,10 @@ interface Props {
   icon: LucideIcon
   storageKey: string
   defaults: LinkItem[]
+  onDeleteSection?: () => void
 }
 
-export default function LinkGrid({ id, title, icon: Icon, storageKey, defaults }: Props) {
+export default function LinkGrid({ id, title, icon: Icon, storageKey, defaults, onDeleteSection }: Props) {
   const [links, setLinks] = useLocalStorage<LinkItem[]>(storageKey, defaults)
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<LinkItem | null>(null)
@@ -101,10 +102,26 @@ export default function LinkGrid({ id, title, icon: Icon, storageKey, defaults }
               {title}
             </h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={openAdd}>
-            <Plus size={13} />
-            添加
-          </Button>
+          <div className="flex gap-1">
+            {onDeleteSection && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`确认删除「${title}」分类？其中的链接也会一并删除。`)) {
+                    onDeleteSection()
+                  }
+                }}
+              >
+                <Trash2 size={13} />
+                删除分类
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={openAdd}>
+              <Plus size={13} />
+              添加
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
