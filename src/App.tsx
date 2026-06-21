@@ -22,6 +22,7 @@ import GitHubContrib from './components/modules/GitHubContrib'
 import WeatherModule from './components/modules/WeatherModule'
 import ReadingList from './components/modules/ReadingList'
 import SettingsPanel from './components/modules/SettingsPanel'
+import { pullFromCloud, pushToCloud } from './hooks/useCloudSync'
 
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useTheme } from './hooks/useTheme'
@@ -60,6 +61,28 @@ export default function App() {
     DEFAULT_SETTINGS
   )
   const [customSections, setCustomSections] = useCustomSections()
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+
+  // 启动时从云端拉取数据
+  useEffect(() => {
+    pullFromCloud().then((ok) => {
+      if (ok) window.location.reload()
+    })
+  }, [])
+
+  // 页面关闭前推送
+  useEffect(() => {
+    const handler = () => { pushToCloud() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  const handleManualSync = async () => {
+    setSyncStatus('syncing')
+    const ok = await pushToCloud()
+    setSyncStatus(ok ? 'ok' : 'error')
+    setTimeout(() => setSyncStatus('idle'), 3000)
+  }
 
   const deleteCustomSection = (id: string, storageKey: string) => {
     setCustomSections((prev) => prev.filter((s) => s.id !== id))
@@ -277,6 +300,8 @@ export default function App() {
         onUpdate={setSettings}
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        syncStatus={syncStatus}
+        onManualSync={handleManualSync}
       />
     </div>
   )

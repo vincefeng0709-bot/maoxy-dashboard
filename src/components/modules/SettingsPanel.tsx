@@ -21,6 +21,8 @@ interface Props {
   onUpdate: (s: SettingsType) => void
   isOpen: boolean
   onClose: () => void
+  syncStatus?: 'idle' | 'syncing' | 'ok' | 'error'
+  onManualSync?: () => void
 }
 
 const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -42,7 +44,7 @@ const moduleLabels: Record<string, string> = {
   reading: '阅读清单',
 }
 
-export default function SettingsPanel({ settings, onUpdate, isOpen, onClose }: Props) {
+export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syncStatus = 'idle', onManualSync }: Props) {
   const [userName, setUserName] = useState(settings.userName)
 
   const updateModule = (key: string, value: boolean) => {
@@ -210,6 +212,30 @@ export default function SettingsPanel({ settings, onUpdate, isOpen, onClose }: P
                     </div>
                   ))}
                 </div>
+              </section>
+
+              {/* Cloud Sync */}
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Download size={13} className="text-zinc-400" />
+                  <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    云端同步
+                  </h3>
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={onManualSync}
+                  disabled={syncStatus === 'syncing'}
+                  className="w-full justify-center"
+                >
+                  {syncStatus === 'syncing' && '同步中...'}
+                  {syncStatus === 'ok' && '✓ 同步成功'}
+                  {syncStatus === 'error' && '✗ 同步失败'}
+                  {syncStatus === 'idle' && '立即同步到云端'}
+                </Button>
+                <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-2">
+                  数据自动从云端加载 · 关闭页面时自动推送
+                </p>
               </section>
 
               {/* Backup */}
