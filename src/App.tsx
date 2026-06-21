@@ -12,6 +12,10 @@ import Sidebar from './components/layout/Sidebar'
 import HeroSection from './components/modules/HeroSection'
 import SearchCenter from './components/modules/SearchCenter'
 import LinkGrid from './components/modules/LinkGrid'
+import CustomSectionManager, {
+  useCustomSections,
+  getIconComponent,
+} from './components/modules/CustomSectionManager'
 import TodoModule from './components/modules/TodoModule'
 import QuickNotes from './components/modules/QuickNotes'
 import GitHubContrib from './components/modules/GitHubContrib'
@@ -55,6 +59,7 @@ export default function App() {
     'dashboard-settings',
     DEFAULT_SETTINGS
   )
+  const [customSections] = useCustomSections()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('hero')
@@ -185,6 +190,31 @@ export default function App() {
                   />
                 </div>
               )}
+            </div>
+
+            {/* Custom sections */}
+            {customSections.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {customSections.map((section) => {
+                  const Icon = getIconComponent(section.iconName)
+                  return (
+                    <div key={section.id} data-section={`custom-${section.id}`}>
+                      <LinkGrid
+                        id={`custom-${section.id}`}
+                        title={section.title}
+                        icon={Icon}
+                        storageKey={section.storageKey}
+                        defaults={[]}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Add custom section button */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <CustomSectionManager />
             </div>
 
             {/* Todo + Weather row */}

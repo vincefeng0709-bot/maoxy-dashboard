@@ -52,6 +52,14 @@ export interface SearchEngineConfig {
   color: string
 }
 
+export interface CustomSection {
+  id: string
+  title: string
+  iconName: string
+  storageKey: string
+  createdAt: string
+}
+
 export interface WeatherData {
   temperature: number
   humidity: number

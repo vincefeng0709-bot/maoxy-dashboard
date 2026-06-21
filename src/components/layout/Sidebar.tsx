@@ -13,6 +13,7 @@ import {
   BookOpen,
   Settings,
 } from 'lucide-react'
+import { useCustomSections, getIconComponent } from '../modules/CustomSectionManager'
 
 interface NavItem {
   id: string
@@ -41,6 +42,8 @@ interface Props {
 }
 
 export default function Sidebar({ onSettingsOpen, activeSection }: Props) {
+  const [customSections] = useCustomSections()
+
   const scrollTo = (anchor: string) => {
     const el = document.querySelector(anchor)
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -64,7 +67,12 @@ export default function Sidebar({ onSettingsOpen, activeSection }: Props) {
 
       {/* Nav */}
       <nav className="flex-1 flex flex-col items-center gap-1 py-3 overflow-y-auto">
-        {navItems.map((item) => {
+        {[...navItems, ...customSections.map((s) => ({
+          id: `custom-${s.id}`,
+          label: s.title,
+          icon: getIconComponent(s.iconName),
+          anchor: `#custom-${s.id}`,
+        }))].map((item) => {
           const Icon = item.icon
           const isActive = activeSection === item.id
           return (
