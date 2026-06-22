@@ -63,10 +63,14 @@ export default function App() {
   const [customSections, setCustomSections] = useCustomSections()
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
 
-  // 启动时从云端拉取数据
+  // 启动时从云端拉取数据（每个会话只拉一次，避免无限刷新）
   useEffect(() => {
+    if (sessionStorage.getItem('cloud-pulled')) return
     pullFromCloud().then((ok) => {
-      if (ok) window.location.reload()
+      if (ok) {
+        sessionStorage.setItem('cloud-pulled', '1')
+        window.location.reload()
+      }
     })
   }, [])
 
