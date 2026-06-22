@@ -31,7 +31,16 @@ async function apiFetch(path: string, options?: RequestInit) {
 export async function pushToCloud(): Promise<boolean> {
   try {
     const data: Record<string, unknown> = {}
-    SYNC_KEYS.forEach((k) => {
+    // 动态收集自定义分类的 storageKey
+    const customKeys: string[] = []
+    const rawSections = localStorage.getItem('custom-sections')
+    if (rawSections) {
+      try {
+        const sections = JSON.parse(rawSections) as { storageKey: string }[]
+        sections.forEach((s) => { if (s.storageKey) customKeys.push(s.storageKey) })
+      } catch { /* ignore */ }
+    }
+    ;[...SYNC_KEYS, ...customKeys].forEach((k) => {
       const v = localStorage.getItem(k)
       if (v) data[k] = JSON.parse(v)
     })
