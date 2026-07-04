@@ -17,6 +17,11 @@ import CustomSectionAddButton, {
   getIconComponent,
 } from './components/modules/CustomSectionManager'
 import TodoModule from './components/modules/TodoModule'
+import MusicPlayer from './components/modules/MusicPlayer'
+import PomodoroTimer from './components/modules/PomodoroTimer'
+import CountdownList from './components/modules/CountdownList'
+import ArxivFeed from './components/modules/ArxivFeed'
+import AuroraBackground from './components/ui/AuroraBackground'
 import QuickNotes from './components/modules/QuickNotes'
 import GitHubContrib from './components/modules/GitHubContrib'
 import WeatherModule from './components/modules/WeatherModule'
@@ -24,7 +29,7 @@ import ReadingList from './components/modules/ReadingList'
 import SettingsPanel from './components/modules/SettingsPanel'
 import { pullFromCloud, pushToCloud } from './hooks/useCloudSync'
 
-import { useLocalStorage } from './hooks/useLocalStorage'
+import { useLocalStorage, DATA_CHANGED_EVENT } from './hooks/useLocalStorage'
 import { useTheme } from './hooks/useTheme'
 
 import {
@@ -41,6 +46,7 @@ const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   githubUsername: '',
   weatherCity: '',
+  wallpaper: 'aurora',
   enabledModules: {
     search: true,
     aiTools: true,
@@ -52,6 +58,10 @@ const DEFAULT_SETTINGS: Settings = {
     github: true,
     weather: true,
     reading: true,
+    music: true,
+    pomodoro: true,
+    countdown: true,
+    arxiv: true,
   },
 }
 
@@ -61,31 +71,76 @@ export default function App() {
     DEFAULT_SETTINGS
   )
   const [customSections, setCustomSections] = useCustomSections()
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+  const [syncState, setSyncState] = useState<{
+    status: 'idle' | 'syncing' | 'ok' | 'error'
+    error?: string
+    lastSync?: Date
+  }>({ status: 'idle' })
 
-  // 启动时从云端拉取数据（每个会话只拉一次，避免无限刷新）
+  // 启动时从云端拉取数据；只有云端和本地不一致时才刷新，天然避免无限刷新
   useEffect(() => {
-    if (sessionStorage.getItem('cloud-pulled')) return
-    pullFromCloud().then((ok) => {
-      if (ok) {
-        sessionStorage.setItem('cloud-pulled', '1')
-        window.location.reload()
-      }
+    pullFromCloud().then((r) => {
+      if (r.ok && r.changed) window.location.reload()
     })
   }, [])
 
-  // 页面关闭前推送
+  // 数据变化后防抖 2 秒自动推送
   useEffect(() => {
-    const handler = () => { pushToCloud() }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const onChange = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async () => {
+        setSyncState((s) => ({ ...s, status: 'syncing' }))
+        const r = await pushToCloud()
+        setSyncState((s) => ({
+          status: r.ok ? 'ok' : 'error',
+          error: r.error,
+          lastSync: r.ok ? new Date() : s.lastSync,
+        }))
+      }, 2000)
+    }
+    window.addEventListener(DATA_CHANGED_EVENT, onChange)
+    return () => {
+      window.removeEventListener(DATA_CHANGED_EVENT, onChange)
+      if (timer) clearTimeout(timer)
+    }
   }, [])
 
-  const handleManualSync = async () => {
-    setSyncStatus('syncing')
-    const ok = await pushToCloud()
-    setSyncStatus(ok ? 'ok' : 'error')
-    setTimeout(() => setSyncStatus('idle'), 3000)
+  // 页面隐藏/关闭时立即推送（fetch keepalive 保证请求发出）
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') pushToCloud()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', onHide)
+    }
+  }, [])
+
+  const handlePush = async () => {
+    setSyncState((s) => ({ ...s, status: 'syncing' }))
+    const r = await pushToCloud()
+    setSyncState((s) => ({
+      status: r.ok ? 'ok' : 'error',
+      error: r.error,
+      lastSync: r.ok ? new Date() : s.lastSync,
+    }))
+  }
+
+  const handlePull = async () => {
+    setSyncState((s) => ({ ...s, status: 'syncing' }))
+    const r = await pullFromCloud()
+    if (r.ok && r.changed) {
+      window.location.reload()
+      return
+    }
+    setSyncState((s) => ({
+      status: r.ok ? 'ok' : 'error',
+      error: r.error,
+      lastSync: r.ok ? new Date() : s.lastSync,
+    }))
   }
 
   const deleteCustomSection = (id: string, storageKey: string) => {
@@ -116,20 +171,20 @@ export default function App() {
     return () => observer.disconnect()
   }, [])
 
-  const { enabledModules: em } = settings
+  // 旧版本存储的设置可能缺少新增的模块开关，用默认值补齐
+  const em = { ...DEFAULT_SETTINGS.enabledModules, ...settings.enabledModules }
+  const wallpaper = settings.wallpaper ?? 'aurora'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-stone-50 to-amber-50/30 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 transition-colors duration-300">
-      {/* Ambient glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-claude-200/20 dark:bg-claude-900/10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-blue-100/20 dark:bg-blue-900/5 blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300">
+      {wallpaper === 'aurora' && <AuroraBackground />}
 
       {/* Sidebar */}
       <Sidebar
         onSettingsOpen={() => setSettingsOpen(true)}
         activeSection={activeSection}
+        syncStatus={syncState.status}
+        lastSync={syncState.lastSync}
       />
 
       {/* Mobile header */}
@@ -250,6 +305,34 @@ export default function App() {
               <CustomSectionAddButton />
             </div>
 
+            {/* Pomodoro + Countdown row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {em.pomodoro && (
+                <div data-section="pomodoro">
+                  <PomodoroTimer />
+                </div>
+              )}
+              {em.countdown && (
+                <div data-section="countdown">
+                  <CountdownList />
+                </div>
+              )}
+            </div>
+
+            {/* Music + arXiv row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {em.music && (
+                <div data-section="music">
+                  <MusicPlayer />
+                </div>
+              )}
+              {em.arxiv && (
+                <div data-section="arxiv">
+                  <ArxivFeed />
+                </div>
+              )}
+            </div>
+
             {/* Todo + Weather row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {em.todo && (
@@ -291,9 +374,10 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1 }}
-            className="mt-16 pb-4 text-center text-xs text-zinc-300 dark:text-zinc-700"
+            className="mt-16 pb-4 text-center font-mono text-[11px] tracking-wide text-zinc-300 dark:text-zinc-700"
           >
-            Maoxy Dashboard · Built with ❤️ · {new Date().getFullYear()}
+            MAOXY DASHBOARD · {new Date().getFullYear()}
+            {syncState.lastSync && ` · synced ${syncState.lastSync.toLocaleTimeString('zh-CN', { hour12: false })}`}
           </motion.footer>
         </div>
       </main>
@@ -304,8 +388,9 @@ export default function App() {
         onUpdate={setSettings}
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        syncStatus={syncStatus}
-        onManualSync={handleManualSync}
+        syncState={syncState}
+        onPush={handlePush}
+        onPull={handlePull}
       />
     </div>
   )

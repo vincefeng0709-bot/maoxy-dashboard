@@ -1,7 +1,8 @@
-import { useCallback, useRef } from 'react'
+import { LOCAL_UPDATED_AT_KEY } from './useLocalStorage'
 
 const API_BASE = 'https://api.xinymao.cn'
-const SYNC_TOKEN = 'maoxy-secret-token'
+// 注意：前端打包后 token 对外可见，仅用于防止随意扫描，不是真正的身份认证
+const SYNC_TOKEN = 'mx-57a3c5c3783b54ffd0bd0f09277e3bd6'
 
 const SYNC_KEYS = [
   'dashboard-settings',
@@ -15,69 +16,135 @@ const SYNC_KEYS = [
   'custom-sections',
   'github-username',
   'weather-city',
+  'music-config',
+  'countdowns',
+  'arxiv-config',
 ]
 
-async function apiFetch(path: string, options?: RequestInit) {
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-sync-token': SYNC_TOKEN,
-      ...options?.headers,
-    },
-  })
+export interface SyncResult {
+  ok: boolean
+  /** 拉取时云端数据是否与本地不同（需要刷新页面） */
+  changed?: boolean
+  /** 失败时的可读原因 */
+  error?: string
 }
 
-export async function pushToCloud(): Promise<boolean> {
+function statusError(status: number): string {
+  if (status === 401) return '认证失败：token 不匹配，请检查服务器配置'
+  if (status >= 500) return `服务器错误（${status}），请稍后重试`
+  return `请求失败（${status}）`
+}
+
+export async function apiFetch(path: string, options?: RequestInit) {
+  const doFetch = () =>
+    fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-sync-token': SYNC_TOKEN,
+        ...options?.headers,
+      },
+    })
+  // 网络偶发断连时自动重试两次
   try {
-    const data: Record<string, unknown> = {}
-    // 动态收集自定义分类的 storageKey
-    const customKeys: string[] = []
-    const rawSections = localStorage.getItem('custom-sections')
-    if (rawSections) {
-      try {
-        const sections = JSON.parse(rawSections) as { storageKey: string }[]
-        sections.forEach((s) => { if (s.storageKey) customKeys.push(s.storageKey) })
-      } catch { /* ignore */ }
+    return await doFetch()
+  } catch {
+    await new Promise((r) => setTimeout(r, 800))
+    try {
+      return await doFetch()
+    } catch {
+      await new Promise((r) => setTimeout(r, 1500))
+      return doFetch()
     }
-    ;[...SYNC_KEYS, ...customKeys].forEach((k) => {
+  }
+}
+
+/** 收集自定义分类的动态 storageKey */
+function getCustomKeys(): string[] {
+  const keys: string[] = []
+  try {
+    const raw = localStorage.getItem('custom-sections')
+    if (raw) {
+      const sections = JSON.parse(raw) as { storageKey?: string }[]
+      sections.forEach((s) => {
+        if (s.storageKey) keys.push(s.storageKey)
+      })
+    }
+  } catch {
+    // custom-sections 损坏时跳过，不影响其余数据同步
+  }
+  return keys
+}
+
+function collectLocalData(): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  ;[...SYNC_KEYS, ...getCustomKeys()].forEach((k) => {
+    try {
       const v = localStorage.getItem(k)
       if (v) data[k] = JSON.parse(v)
-    })
+    } catch {
+      // 单个 key 损坏时跳过，不拖垮整次推送
+    }
+  })
+  const localAt = Number(localStorage.getItem(LOCAL_UPDATED_AT_KEY) ?? 0)
+  data._updatedAt = localAt || Date.now()
+  return data
+}
+
+export async function pushToCloud(): Promise<SyncResult> {
+  try {
     const res = await apiFetch('/data', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(collectLocalData()),
+      // keepalive 保证页面关闭时请求仍能发出
+      keepalive: true,
     })
-    return res.ok
+    if (!res.ok) return { ok: false, error: statusError(res.status) }
+    return { ok: true }
   } catch {
-    return false
+    return { ok: false, error: '网络连接失败，请检查网络后重试' }
   }
 }
 
-export async function pullFromCloud(): Promise<boolean> {
+export async function pullFromCloud(): Promise<SyncResult> {
   try {
     const res = await apiFetch('/data')
-    if (!res.ok) return false
-    const data = await res.json() as Record<string, unknown>
-    if (Object.keys(data).length === 0) return false
-    Object.entries(data).forEach(([k, v]) => {
-      localStorage.setItem(k, JSON.stringify(v))
+    if (!res.ok) return { ok: false, error: statusError(res.status) }
+    const data = (await res.json()) as Record<string, unknown>
+    const keys = Object.keys(data).filter((k) => k !== '_updatedAt')
+    if (keys.length === 0) return { ok: true, changed: false }
+
+    // 本地比云端新（比如上次推送失败）：反向推送，避免覆盖本地修改
+    const remoteAt = Number(data._updatedAt ?? 0)
+    const localAt = Number(localStorage.getItem(LOCAL_UPDATED_AT_KEY) ?? 0)
+    if (localAt > remoteAt) {
+      const pushed = await pushToCloud()
+      return { ok: pushed.ok, changed: false, error: pushed.error }
+    }
+
+    let changed = false
+    keys.forEach((k) => {
+      const next = JSON.stringify(data[k])
+      if (localStorage.getItem(k) !== next) {
+        localStorage.setItem(k, next)
+        changed = true
+      }
     })
-    return true
+
+    // 清理已在别的设备上删除的自定义分类残留数据
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('custom-links-') && !(k in data)) {
+        localStorage.removeItem(k)
+        changed = true
+      }
+    }
+
+    if (changed) {
+      localStorage.setItem(LOCAL_UPDATED_AT_KEY, String(remoteAt || Date.now()))
+    }
+    return { ok: true, changed }
   } catch {
-    return false
+    return { ok: false, error: '网络连接失败，请检查网络后重试' }
   }
-}
-
-export function useCloudSync() {
-  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const schedulePush = useCallback(() => {
-    if (pushTimer.current) clearTimeout(pushTimer.current)
-    pushTimer.current = setTimeout(() => {
-      pushToCloud()
-    }, 2000)
-  }, [])
-
-  return { schedulePush, pushToCloud, pullFromCloud }
 }

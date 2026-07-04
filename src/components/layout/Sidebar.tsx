@@ -12,6 +12,10 @@ import {
   Cloud,
   BookOpen,
   Settings,
+  Timer,
+  Hourglass,
+  Music,
+  Newspaper,
 } from 'lucide-react'
 import { useCustomSections, getIconComponent } from '../modules/CustomSectionManager'
 
@@ -29,6 +33,10 @@ const navItems: NavItem[] = [
   { id: 'dev', label: '开发', icon: Code2, anchor: '#dev-center' },
   { id: 'research', label: '科研', icon: FlaskConical, anchor: '#research' },
   { id: 'blog', label: '博客', icon: BookMarked, anchor: '#blog' },
+  { id: 'pomodoro', label: '番茄钟', icon: Timer, anchor: '#pomodoro' },
+  { id: 'countdown', label: '倒计时', icon: Hourglass, anchor: '#countdown' },
+  { id: 'music', label: '音乐', icon: Music, anchor: '#music' },
+  { id: 'arxiv', label: '论文', icon: Newspaper, anchor: '#arxiv' },
   { id: 'todo', label: '待办', icon: CheckSquare, anchor: '#todo' },
   { id: 'notes', label: '笔记', icon: FileText, anchor: '#notes' },
   { id: 'github', label: 'GitHub', icon: Github, anchor: '#github' },
@@ -39,9 +47,25 @@ const navItems: NavItem[] = [
 interface Props {
   onSettingsOpen: () => void
   activeSection?: string
+  syncStatus?: 'idle' | 'syncing' | 'ok' | 'error'
+  lastSync?: Date
 }
 
-export default function Sidebar({ onSettingsOpen, activeSection }: Props) {
+const syncDotStyle: Record<string, string> = {
+  idle: 'bg-zinc-300 dark:bg-zinc-600',
+  syncing: 'bg-amber-400 animate-pulse',
+  ok: 'bg-emerald-500',
+  error: 'bg-red-500',
+}
+
+const syncDotLabel: Record<string, string> = {
+  idle: '等待同步',
+  syncing: '同步中...',
+  ok: '已同步',
+  error: '同步失败',
+}
+
+export default function Sidebar({ onSettingsOpen, activeSection, syncStatus = 'idle', lastSync }: Props) {
   const [customSections] = useCustomSections()
 
   const scrollTo = (anchor: string) => {
@@ -102,6 +126,18 @@ export default function Sidebar({ onSettingsOpen, activeSection }: Props) {
           )
         })}
       </nav>
+
+      {/* Sync status */}
+      <div
+        className="group relative flex items-center justify-center py-2"
+        title={syncDotLabel[syncStatus]}
+      >
+        <span className={`w-1.5 h-1.5 rounded-full ${syncDotStyle[syncStatus]}`} />
+        <span className="absolute left-full ml-2 px-2 py-1 rounded-lg bg-zinc-900 dark:bg-zinc-700 text-white text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+          {syncDotLabel[syncStatus]}
+          {lastSync && ` · ${lastSync.toLocaleTimeString('zh-CN', { hour12: false })}`}
+        </span>
+      </div>
 
       {/* Settings */}
       <div className="flex items-center justify-center h-14 border-t border-zinc-100 dark:border-zinc-800/60">

@@ -23,13 +23,15 @@ export default function GlassCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      whileHover={hover ? { y: -2, scale: 1.01 } : undefined}
+      whileHover={hover ? { y: -2 } : undefined}
       className={[
         'rounded-2xl border',
-        'bg-white/70 dark:bg-white/5',
-        'border-white/60 dark:border-white/10',
-        'backdrop-blur-xl',
-        'shadow-[0_4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]',
+        'bg-white dark:bg-zinc-900',
+        'border-zinc-200/80 dark:border-zinc-800',
+        'shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.3)]',
+        'hover:border-zinc-300/80 dark:hover:border-zinc-700',
+        'hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_4px_12px_rgba(0,0,0,0.4)]',
+        'transition-[border-color,box-shadow] duration-150',
         onClick ? 'cursor-pointer' : '',
         className,
       ].join(' ')}

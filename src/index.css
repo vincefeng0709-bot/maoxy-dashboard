@@ -96,3 +96,30 @@
     border-left-width: 3px;
   }
 }
+
+/* macOS 风格流光背景 */
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  animation: aurora-drift 24s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4rem, -3rem) scale(1.12);
+  }
+  100% {
+    transform: translate(-3rem, 3rem) scale(0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob {
+    animation: none;
+  }
+}

@@ -23,11 +23,14 @@ export interface ReadingItem {
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 
+export type WallpaperMode = 'plain' | 'aurora'
+
 export interface Settings {
   userName: string
   theme: ThemeMode
   githubUsername: string
   weatherCity: string
+  wallpaper?: WallpaperMode
   enabledModules: {
     search: boolean
     aiTools: boolean
@@ -39,7 +42,28 @@ export interface Settings {
     github: boolean
     weather: boolean
     reading: boolean
+    music?: boolean
+    pomodoro?: boolean
+    countdown?: boolean
+    arxiv?: boolean
   }
+}
+
+export interface CountdownItem {
+  id: string
+  title: string
+  date: string
+  createdAt: string
+}
+
+export interface MusicConfig {
+  platform: 'apple' | 'spotify'
+  appleUrl: string
+  spotifyUrl: string
+}
+
+export interface ArxivConfig {
+  query: string
 }
 
 export type SearchEngine = 'google' | 'baidu' | 'github' | 'scholar' | 'pubmed'

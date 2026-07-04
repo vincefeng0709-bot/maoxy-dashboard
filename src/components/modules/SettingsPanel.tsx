@@ -10,19 +10,28 @@ import {
   User,
   ToggleLeft,
   ToggleRight,
+  RefreshCw,
+  Sparkles,
   X,
 } from 'lucide-react'
 import Button from '../ui/Button'
 import { exportJSON } from '../../utils'
 import type { Settings as SettingsType, ThemeMode } from '../../types'
 
+interface SyncState {
+  status: 'idle' | 'syncing' | 'ok' | 'error'
+  error?: string
+  lastSync?: Date
+}
+
 interface Props {
   settings: SettingsType
   onUpdate: (s: SettingsType) => void
   isOpen: boolean
   onClose: () => void
-  syncStatus?: 'idle' | 'syncing' | 'ok' | 'error'
-  onManualSync?: () => void
+  syncState?: SyncState
+  onPush?: () => void
+  onPull?: () => void
 }
 
 const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
@@ -37,6 +46,10 @@ const moduleLabels: Record<string, string> = {
   devCenter: '开发中心',
   research: '科研中心',
   blog: '博客中心',
+  pomodoro: '番茄钟',
+  countdown: '倒计时',
+  music: '音乐播放器',
+  arxiv: 'arXiv 论文',
   todo: '今日待办',
   notes: '快速笔记',
   github: 'GitHub 贡献图',
@@ -44,7 +57,10 @@ const moduleLabels: Record<string, string> = {
   reading: '阅读清单',
 }
 
-export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syncStatus = 'idle', onManualSync }: Props) {
+export default function SettingsPanel({
+  settings, onUpdate, isOpen, onClose,
+  syncState = { status: 'idle' }, onPush, onPull,
+}: Props) {
   const [userName, setUserName] = useState(settings.userName)
 
   const updateModule = (key: string, value: boolean) => {
@@ -59,11 +75,18 @@ export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syn
     const keys = [
       'todos', 'quick-note', 'reading-list',
       'ai-tools', 'dev-links', 'research-links', 'blog-links',
-      'github-username', 'weather-city',
+      'github-username', 'weather-city', 'custom-sections',
     ]
+    // 自定义分类的链接数据
+    try {
+      const sections = JSON.parse(localStorage.getItem('custom-sections') ?? '[]') as { storageKey?: string }[]
+      sections.forEach((s) => { if (s.storageKey) keys.push(s.storageKey) })
+    } catch { /* ignore */ }
     keys.forEach((k) => {
-      const v = localStorage.getItem(k)
-      if (v) data[k] = JSON.parse(v)
+      try {
+        const v = localStorage.getItem(k)
+        if (v) data[k] = JSON.parse(v)
+      } catch { /* ignore */ }
     })
     exportJSON(data, `maoxy-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`)
   }
@@ -83,6 +106,8 @@ export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syn
           Object.entries(data).forEach(([k, v]) => {
             if (k !== 'settings') localStorage.setItem(k, JSON.stringify(v))
           })
+          // 标记本地为最新，防止刷新后被云端旧数据覆盖
+          localStorage.setItem('local-updated-at', String(Date.now()))
           window.location.reload()
         } catch {
           alert('导入失败：JSON 格式错误')
@@ -182,6 +207,38 @@ export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syn
                 </div>
               </section>
 
+              {/* Wallpaper */}
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles size={13} className="text-zinc-400" />
+                  <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                    背景
+                  </h3>
+                </div>
+                <div className="flex gap-1.5">
+                  {([
+                    { value: 'aurora', label: '流光渐变' },
+                    { value: 'plain', label: '纯色' },
+                  ] as const).map(({ value, label }) => {
+                    const active = (settings.wallpaper ?? 'aurora') === value
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => onUpdate({ ...settings, wallpaper: value })}
+                        className={[
+                          'flex-1 rounded-xl px-3 py-2.5 text-sm transition-all border',
+                          active
+                            ? 'bg-claude-50 dark:bg-claude-900/20 text-claude-600 dark:text-claude-400 border-claude-200 dark:border-claude-800/50'
+                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-transparent',
+                        ].join(' ')}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+
               {/* Modules toggle */}
               <section>
                 <div className="flex items-center gap-2 mb-3">
@@ -191,50 +248,81 @@ export default function SettingsPanel({ settings, onUpdate, isOpen, onClose, syn
                   </h3>
                 </div>
                 <div className="flex flex-col gap-1">
-                  {Object.entries(settings.enabledModules).map(([key, enabled]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-                    >
-                      <span className="text-sm text-zinc-700 dark:text-zinc-200">
-                        {moduleLabels[key]}
-                      </span>
-                      <button
-                        onClick={() => updateModule(key, !enabled)}
-                        className="transition-colors"
+                  {Object.keys(moduleLabels).map((key) => {
+                    // 旧数据里可能没有新增模块的开关，缺省视为开启
+                    const enabled = (settings.enabledModules as Record<string, boolean | undefined>)[key] ?? true
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
                       >
-                        {enabled ? (
-                          <ToggleRight size={22} className="text-claude-500" />
-                        ) : (
-                          <ToggleLeft size={22} className="text-zinc-300 dark:text-zinc-600" />
-                        )}
-                      </button>
-                    </div>
-                  ))}
+                        <span className="text-sm text-zinc-700 dark:text-zinc-200">
+                          {moduleLabels[key]}
+                        </span>
+                        <button
+                          onClick={() => updateModule(key, !enabled)}
+                          className="transition-colors"
+                        >
+                          {enabled ? (
+                            <ToggleRight size={22} className="text-claude-500" />
+                          ) : (
+                            <ToggleLeft size={22} className="text-zinc-300 dark:text-zinc-600" />
+                          )}
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </section>
 
               {/* Cloud Sync */}
               <section>
                 <div className="flex items-center gap-2 mb-3">
-                  <Download size={13} className="text-zinc-400" />
+                  <RefreshCw size={13} className="text-zinc-400" />
                   <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                     云端同步
                   </h3>
                 </div>
-                <Button
-                  variant="primary"
-                  onClick={onManualSync}
-                  disabled={syncStatus === 'syncing'}
-                  className="w-full justify-center"
-                >
-                  {syncStatus === 'syncing' && '同步中...'}
-                  {syncStatus === 'ok' && '✓ 同步成功'}
-                  {syncStatus === 'error' && '✗ 同步失败'}
-                  {syncStatus === 'idle' && '立即同步到云端'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={onPush}
+                    disabled={syncState.status === 'syncing'}
+                    className="flex-1 justify-center"
+                  >
+                    <Upload size={13} />
+                    {syncState.status === 'syncing' ? '同步中...' : '推送到云端'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={onPull}
+                    disabled={syncState.status === 'syncing'}
+                    className="flex-1 justify-center"
+                  >
+                    <Download size={13} />
+                    从云端拉取
+                  </Button>
+                </div>
+                {syncState.status === 'error' && (
+                  <div className="mt-2 rounded-xl bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      同步失败：{syncState.error ?? '未知错误'}
+                    </p>
+                    <button
+                      onClick={onPush}
+                      className="text-xs font-medium text-red-600 dark:text-red-400 underline underline-offset-2 mt-1"
+                    >
+                      重试
+                    </button>
+                  </div>
+                )}
+                {syncState.status === 'ok' && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-2">
+                    ✓ 已同步{syncState.lastSync && ` · ${syncState.lastSync.toLocaleTimeString('zh-CN', { hour12: false })}`}
+                  </p>
+                )}
                 <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-2">
-                  数据自动从云端加载 · 关闭页面时自动推送
+                  修改后自动推送 · 打开页面自动拉取
                 </p>
               </section>
 
