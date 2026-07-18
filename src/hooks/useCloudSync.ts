@@ -1,6 +1,7 @@
 import { LOCAL_UPDATED_AT_KEY } from './useLocalStorage'
 
-const API_BASE = 'https://api.xinymao.cn'
+// 双端口容错：443 被代理/防火墙掐断时自动切换 8443，并记住可用的那个
+const API_BASES = ['https://api.xinymao.cn', 'https://api.xinymao.cn:8443']
 // 注意：前端打包后 token 对外可见，仅用于防止随意扫描，不是真正的身份认证
 const SYNC_TOKEN = 'mx-57a3c5c3783b54ffd0bd0f09277e3bd6'
 
@@ -36,8 +37,8 @@ function statusError(status: number): string {
 }
 
 export async function apiFetch(path: string, options?: RequestInit) {
-  const doFetch = () =>
-    fetch(`${API_BASE}${path}`, {
+  const doFetch = (base: string) =>
+    fetch(`${base}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -45,18 +46,28 @@ export async function apiFetch(path: string, options?: RequestInit) {
         ...options?.headers,
       },
     })
-  // 网络偶发断连时自动重试两次
-  try {
-    return await doFetch()
-  } catch {
-    await new Promise((r) => setTimeout(r, 800))
-    try {
-      return await doFetch()
-    } catch {
-      await new Promise((r) => setTimeout(r, 1500))
-      return doFetch()
+
+  // 上次成功的端口优先
+  const preferred = localStorage.getItem('api-base-preferred')
+  const bases = preferred && API_BASES.includes(preferred)
+    ? [preferred, ...API_BASES.filter((b) => b !== preferred)]
+    : API_BASES
+
+  let lastError: unknown
+  // 两轮尝试：每轮遍历所有端口，轮间稍作等待
+  for (let round = 0; round < 2; round++) {
+    if (round > 0) await new Promise((r) => setTimeout(r, 800))
+    for (const base of bases) {
+      try {
+        const res = await doFetch(base)
+        localStorage.setItem('api-base-preferred', base)
+        return res
+      } catch (e) {
+        lastError = e
+      }
     }
   }
+  throw lastError
 }
 
 /** 收集自定义分类的动态 storageKey */
